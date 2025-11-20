@@ -173,6 +173,20 @@ int MEMPHY_dump(struct memphy_struct *mp)
   /*TODO dump memphy contnt mp->storage
    *     for tracing the memory content
    */
+
+   //Check valid
+   if(mp->storage == NULL) return -1;
+
+   //Print
+   BYTE tempValue;
+   for(int i = 0; i < mp->maxsz; i++){
+      if(MEMPHY_read(mp, i, &tempValue) == 0){
+         if(tempValue != 0) {
+            printf("Addr: 0x%x Value: %d\n", i, tempValue);
+         }
+      }
+   }
+   printf("DUMP END\n");
    return 0;
 }
 
