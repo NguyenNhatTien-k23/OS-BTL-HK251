@@ -63,9 +63,37 @@ struct pcb_t * get_mlq_proc(void) {
 	/*TODO: get a process from PRIORITY [ready_queue].
 	 *      It worth to protect by a mechanism.
 	 * */
+	int picked = 0;
+
+    /* First attempt: use current slot[] values */
+    for (int prio = 0; prio < MAX_PRIO; prio++) {
+        if (!empty(&mlq_ready_queue[prio]) && slot[prio] > 0) {
+            slot[prio]--;
+            proc = dequeue(&mlq_ready_queue[prio]);
+            picked = 1;
+            break;
+        }
+    }
+
+	if (!picked) {
+        for (int i = 0; i < MAX_PRIO; i++)
+            slot[i] = MAX_PRIO - i;
+
+        /* retry scan */
+        for (int prio = 0; prio < MAX_PRIO; prio++) {
+            if (!empty(&mlq_ready_queue[prio]) && slot[prio] > 0) {
+                slot[prio]--;
+                proc = dequeue(&mlq_ready_queue[prio]);
+                picked = 1;
+                break;
+            }
+        }
+    }
 
 	if (proc != NULL)
 		enqueue(&running_list, proc);
+	
+	pthread_mutex_unlock(&queue_lock);
 	return proc;	
 }
 
@@ -79,7 +107,8 @@ void put_mlq_proc(struct pcb_t * proc) {
 	 * 
 	 */
 
-	pthread_mutex_lock(&queue_lock);
+	pthread_mutex_lock(&queue_lock);	
+	purgequeue(&running_list, proc);
 	enqueue(&mlq_ready_queue[proc->prio], proc);
 	pthread_mutex_unlock(&queue_lock);
 }
@@ -119,6 +148,11 @@ struct pcb_t * get_proc(void) {
 	 *       It worth to protect by a mechanism.
 	 * 
 	 */
+	if (!empty(&ready_queue)) {
+		proc = dequeue(&ready_queue);
+		if (proc != NULL)
+			enqueue(&running_list, proc);
+	}
 
 	pthread_mutex_unlock(&queue_lock);
 
@@ -149,6 +183,7 @@ void add_proc(struct pcb_t * proc) {
 	 */
 
 	pthread_mutex_lock(&queue_lock);
+	enqueue(&running_list, proc);
 	enqueue(&ready_queue, proc);
 	pthread_mutex_unlock(&queue_lock);	
 }
