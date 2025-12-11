@@ -27,24 +27,39 @@ int __sys_memmap(struct krnl_t *krnl, uint32_t pid, struct sc_regs* regs)
    int memop = regs->a1;
    BYTE value;
    
-   /* TODO THIS DUMMY CREATE EMPTY PROC TO AVOID COMPILER NOTIFY 
-    *      need to be eliminated
-	*/
-   struct pcb_t *caller = malloc(sizeof(struct pcb_t));
+   /* Find the caller process from kernel's running list using PID */
+   struct pcb_t *caller = NULL;
 
    /*
     * @bksysnet: Please note in the dual spacing design
     *            syscall implementations are in kernel space.
     */
 
-   /* TODO: Traverse proclist to terminate the proc
-    *       stcmp to check the process match proc_name
-    */
-//	struct queue_t *running_list = krnl->running_list;
-
-    /* TODO Maching and marking the process */
-    /* user process are not allowed to access directly pcb in kernel space of syscall */
-    //....
+   /* Traverse proclist to find the process with matching PID */
+   if (krnl->running_list != NULL) {
+      struct queue_t *running_list = krnl->running_list;
+      struct pcb_t *proc;
+      int i;
+      int list_size = running_list->size;
+      
+      /* Search through running list for matching PID */
+      for (i = 0; i < list_size && caller == NULL; i++) {
+         proc = (struct pcb_t *)dequeue(running_list);
+         if (proc != NULL) {
+            if (proc->pid == pid) {
+               caller = proc;
+            }
+            /* Re-enqueue process to maintain queue state */
+            enqueue(running_list, proc);
+         }
+      }
+   }
+   
+   /* Validate caller process was found */
+   if (caller == NULL) {
+      printf("Error: Process with PID %d not found\n", pid);
+      return -1;
+   }
 	
    switch (memop) {
    case SYSMEM_MAP_OP:
