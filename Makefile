@@ -53,7 +53,17 @@ $(OBJ)/%.o: %.c ${HEADER} $(OBJ)
 $(OBJ):
 	mkdir -p $(OBJ)
 
+# Build and run only paging.c for testing __alloc and __free
+paging_test:
+	gcc -Iinclude -Wall -g src/paging.c src/libmem.c src/mm.c src/mm-memphy.c src/mm-vm.c src/mem.c src/cpu.c src/libstd.c -lpthread -o paging_test
+
 clean:
 	rm -f $(SRC)/*.lst
 	rm -f $(OBJ)/*.o os sched mem pdg
 	rm -rf $(OBJ)
+
+# Build và chạy kiểm thử alloc/free tối giản
+paging_test:
+	gcc -Iinclude -Wall -g src/paging.c src/libmem.c -lpthread -o paging_test
+
+.PHONY: paging_test
