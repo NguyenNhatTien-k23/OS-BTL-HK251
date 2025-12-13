@@ -162,7 +162,53 @@ int pgread(
   uint32_t source, // Index of source register
   addr_t offset, // Source address = [source] + [offset]
   uint32_t destination) {
+    BYTE data;
+    addr_t vadr = proc->regs[source] + offset;
+    addr_t pgn = PAGING_PGN(vadr);
+    addr_t off = PAGING_OFFST(vadr);
 
+    uint32_t pte = pte_get_entry(proc, pgn);
+
+    if(!(pte & PAGING_PTE_PRESENT_MASK)){
+      if(pte & PAGING_PTE_SWAPPED_MASK){
+        addr_t vicpgn, swpfpn;
+        int vicfpn;
+        uint32_t vicpte;
+
+        swpfpn = (pte & PAGING_PTE_SWPOFF_MASK) >> PAGING_PTE_SWPOFF_LOBIT;
+
+        if(MEMPHY_get_freefp(proc->krnl->mram, &vicfpn) < 0){
+          struct pgn_t *victim = proc->krnl->mm->fifo_pgn;
+          vicpgn = victim->pgn;
+          
+          uint32_t vicpte = pte_get_entry(proc, vicpgn);
+          int vic_phy_fpn = (vicpte & PAGING_PTE_FPN_MASK) >> PAGING_PTE_FPN_LOBIT;
+
+          int tgtfpn_swp;
+          MEMPHY_get_freefp(proc->krnl->active_mswp, &tgtfpn_swp);
+
+          __swap_cp_page(proc->krnl->mram, vic_phy_fpn, proc->krnl->active_mswp, tgtfpn_swp);
+
+          pte_set_swap(proc, vicpgn, 0, tgtfpn_swp);
+          vicfpn = vic_phy_fpn;
+        }
+
+        __swap_cp_page(proc->krnl->active_mswp, swpfpn, proc->krnl->mram, vicfpn);
+        enlist_pgn_node(&proc->krnl->mm->fifo_pgn, pgn);
+      }
+      else{
+        return -1;
+      }
+    }
+
+    pte = pte_get_entry(proc, pgn);
+    addr_t fpn = (pte & PAGING_PTE_FPN_MASK) >> PAGING_PTE_FPN_LOBIT;
+    addr_t phyadr = (fpn * PAGING_PAGESZ) + off;
+
+    MEMPHY_read(proc->krnl->mram, phyadr, &data);
+    proc->regs[destination] = data;
+    
+    return 0;
 }
 
 int pgwrite(
@@ -170,7 +216,54 @@ int pgwrite(
   BYTE data, // Data to be wrttien into memory
   uint32_t destination, // Index of destination register
   addr_t offset) {
+    addr_t vadr = proc->regs[destination] + offset;
+  addr_t pgn = PAGING_PGN(vadr);
+  addr_t off = PAGING_OFFST(vadr);
 
+  uint32_t pte = pte_get_entry(proc, pgn);
+
+  if (!(pte & PAGING_PTE_PRESENT_MASK)) {
+    if (pte & PAGING_PTE_SWAPPED_MASK) {
+       addr_t vicpgn;
+       int vicfpn;
+       int swpfpn;
+
+       swpfpn = (pte & PAGING_PTE_SWPOFF_MASK) >> PAGING_PTE_SWPOFF_LOBIT;
+
+       if (MEMPHY_get_freefp(proc->krnl->mram, &vicfpn) < 0) {
+         struct pgn_t * victim = proc->krnl->mm->fifo_pgn;
+         vicpgn = victim->pgn;
+
+         uint32_t vicpte = pte_get_entry(proc, vicpgn);
+         int vic_phy_fpn = (vicpte & PAGING_PTE_FPN_MASK) >> PAGING_PTE_FPN_LOBIT;
+
+         int tgtfpn_swp;
+
+         MEMPHY_get_freefp(proc->krnl->active_mswp, &tgtfpn_swp);
+
+         __swap_cp_page(proc->krnl->mram, vic_phy_fpn, proc->krnl->active_mswp, tgtfpn_swp);
+         pte_set_swap(proc, vicpgn, 0, tgtfpn_swp);
+         vicfpn = vic_phy_fpn;
+       }
+
+       __swap_cp_page(proc->krnl->active_mswp, swpfpn, proc->krnl->mram, vicfpn);
+       pte_set_fpn(proc, pgn, vicfpn);
+       
+
+       enlist_pgn_node(&proc->krnl->mm->fifo_pgn, pgn);
+    } 
+    else {
+        return -1;
+    }
+  }
+
+  pte = pte_get_entry(proc, pgn);
+  addr_t fpn = (pte & PAGING_PTE_FPN_MASK) >> PAGING_PTE_FPN_LOBIT;
+  addr_t phyadr = (fpn * PAGING_PAGESZ) + off;
+
+  MEMPHY_write(proc->krnl->mram, phyadr, data);
+
+  return 0;
 }
 
 // #endif
