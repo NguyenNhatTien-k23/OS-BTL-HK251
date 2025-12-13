@@ -1,7 +1,7 @@
 
 #include "cpu.h"
 #include "mem.h"
-#include "mm.h"
+#include "mm64.h"
 #include "syscall.h"
 #include "libmem.h"
 

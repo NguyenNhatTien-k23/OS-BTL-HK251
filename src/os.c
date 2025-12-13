@@ -3,7 +3,7 @@
 #include "timer.h"
 #include "sched.h"
 #include "loader.h"
-#include "mm.h"
+#include "mm64.h"
 
 #include <pthread.h>
 #include <stdio.h>

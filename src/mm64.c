@@ -69,23 +69,23 @@ int init_pte(addr_t* pte,
  */
 int get_pd_from_address(addr_t addr, addr_t* pgd, addr_t* p4d, addr_t* pud, addr_t* pmd, addr_t* pt) {
   // 	/* Extract page direactories */
-  	*pgd = (addr&PAGING64_ADDR_PGD_MASK)>>PAGING64_ADDR_PGD_LOBIT;
-  	*p4d = (addr&PAGING64_ADDR_P4D_MASK)>>PAGING64_ADDR_P4D_LOBIT;
-  	*pud = (addr&PAGING64_ADDR_PUD_MASK)>>PAGING64_ADDR_PUD_LOBIT;
-  	*pmd = (addr&PAGING64_ADDR_PMD_MASK)>>PAGING64_ADDR_PMD_LOBIT;
-  	*pt = (addr&PAGING64_ADDR_PT_MASK)>>PAGING64_ADDR_PT_LOBIT;
+  *pgd = (addr & PAGING64_ADDR_PGD_MASK) >> PAGING64_ADDR_PGD_LOBIT;
+  *p4d = (addr & PAGING64_ADDR_P4D_MASK) >> PAGING64_ADDR_P4D_LOBIT;
+  *pud = (addr & PAGING64_ADDR_PUD_MASK) >> PAGING64_ADDR_PUD_LOBIT;
+  *pmd = (addr & PAGING64_ADDR_PMD_MASK) >> PAGING64_ADDR_PMD_LOBIT;
+  *pt = (addr & PAGING64_ADDR_PT_MASK) >> PAGING64_ADDR_PT_LOBIT;
 
-    /* TODO: implement the page direactories mapping */
-    //So what do i map this to what?
-    //What table?
-  // if (pgd) *pgd = PAGING64_ADDR_PGD(addr);
-  // if (p4d) *p4d = PAGING64_ADDR_P4D(addr);
-  // if (pud) *pud = PAGING64_ADDR_PUD(addr);
-  // if (pmd) *pmd = PAGING64_ADDR_PMD(addr);
-  // if (pt) *pt = PAGING64_ADDR_PT(addr);
+  /* TODO: implement the page direactories mapping */
+  //So what do i map this to what?
+  //What table?
+// if (pgd) *pgd = PAGING64_ADDR_PGD(addr);
+// if (p4d) *p4d = PAGING64_ADDR_P4D(addr);
+// if (pud) *pud = PAGING64_ADDR_PUD(addr);
+// if (pmd) *pmd = PAGING64_ADDR_PMD(addr);
+// if (pt) *pt = PAGING64_ADDR_PT(addr);
 
-  // fprintf(stderr, "Get PD from addr: 0x%llx => pgd: 0x%llx p4d: 0x%llx pud: 0x%llx pmd: 0x%llx pt: 0x%llx\n",
-  //   addr, (pgd)?*pgd:0, (p4d)?*p4d:0, (pud)?*pud:0, (pmd)?*pmd:0, (pt)?*pt:0);
+// fprintf(stderr, "Get PD from addr: 0x%llx => pgd: 0x%llx p4d: 0x%llx pud: 0x%llx pmd: 0x%llx pt: 0x%llx\n",
+//   addr, (pgd)?*pgd:0, (p4d)?*p4d:0, (pud)?*pud:0, (pmd)?*pmd:0, (pt)?*pt:0);
 
   return 0;
 }
@@ -190,7 +190,7 @@ int pte_set_fpn(struct pcb_t* caller, addr_t pgn, addr_t fpn) {
   /* TODO Perform multi-level page mapping */
   get_pd_from_pagenum(pgn, &pgd, &p4d, &pud, &pmd, &pt);
   /* Level 1: PGD */
-  
+
   if (krnl->mm->pgd[pgd] == 0) {
     krnl->mm->pgd[pgd] = (addr_t)calloc(PAGING64_MAX_PGN, sizeof(addr_t));
   }
@@ -253,13 +253,13 @@ uint32_t pte_get_entry(struct pcb_t* caller, addr_t pgn) {
     krnl->mm->pgd[pgd] = (addr_t)calloc(PAGING64_MAX_PGN, sizeof(addr_t));
   }
   addr_t* p4d_tbl = (addr_t*)krnl->mm->pgd[pgd];
-  
+
   /* Level 2: P4D */
   if (p4d_tbl[p4d] == 0) {
     p4d_tbl[p4d] = (addr_t)calloc(PAGING64_MAX_PGN, sizeof(addr_t));
   }
   addr_t* pud_tbl = (addr_t*)p4d_tbl[p4d];
-  
+
   /* Level 3: PUD */
   if (pud_tbl[pud] == 0) {
     pud_tbl[pud] = (addr_t)calloc(PAGING64_MAX_PGN, sizeof(addr_t));
@@ -313,7 +313,7 @@ int pte_set_entry(struct pcb_t* caller, addr_t pgn, uint32_t pte_val) {
     pud_tbl[pud] = (addr_t)calloc(PAGING64_MAX_PGN, sizeof(addr_t));
   }
   addr_t* pmd_tbl = (addr_t*)pud_tbl[pud];
-  
+
   /* Level 4: PMD */
   if (pmd_tbl[pmd] == 0) {
     pmd_tbl[pmd] = (addr_t)calloc(PAGING64_MAX_PGN, sizeof(addr_t));
@@ -515,12 +515,12 @@ int init_mm(struct mm_struct* mm, struct pcb_t* caller) {
   struct vm_area_struct* vma0 = malloc(sizeof(struct vm_area_struct));
 
   /* TODO init page table directory */
-  if(!mm){
+  if (!mm) {
     printf("init_mm: mm is NULL\n");
     return -1;
   }
 
-  if(!caller){
+  if (!caller) {
     printf("init_mm: caller is NULL\n");
     return -1;
   }
@@ -641,13 +641,22 @@ int print_pgtbl(struct pcb_t* caller, addr_t start, addr_t end) {
   addr_t pgit;
   struct krnl_t* krnl = caller->krnl;
 
+  if (end == (addr_t)-1) {
+    struct vm_area_struct* cur_vma = get_vma_by_num(caller->krnl->mm, 0);
+    start = cur_vma->vm_start;
+    end = cur_vma->vm_end;
+  }
+
+  pgn_start = start >> PAGING64_ADDR_PT_SHIFT;
+  pgn_end = end >> PAGING64_ADDR_PT_SHIFT;
+
   addr_t pgd = 0;
   addr_t p4d = 0;
   addr_t pud = 0;
   addr_t pmd = 0;
   addr_t pt = 0;
 
-  for (pgit = start; pgit <= end; pgit += PAGING64_PAGESZ) {
+  for (pgit = pgn_start; pgit <= pgn_end; pgit += PAGING64_PAGESZ) {
     /* TODO traverse the page map and dump the page directory entries */
     get_pd_from_address(pgit, &pgd, &p4d, &pud, &pmd, &pt);
 
@@ -669,7 +678,8 @@ int print_pgtbl(struct pcb_t* caller, addr_t start, addr_t end) {
     uint64_t pte = pt_tbl[pt];
 
     if (!(pte & PAGING_PTE_PRESENT_MASK)) continue; // skip unmapped
-    printf("VA: 0x%016lx -> PTE: 0x%016lx\n", pgit, pte);
+    fprintf(stdout, "IDX: PGD=%lu P4D=%lu PUD=%lu PMD=%lu PT=%lu\n", pgd, p4d, pud, pmd, pt);
+
 
   }
   return 0;
