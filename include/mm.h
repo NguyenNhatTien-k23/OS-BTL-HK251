@@ -141,6 +141,7 @@ int pgwrite(
 		BYTE data, // Data to be wrttien into memory
 		uint32_t destination, // Index of destination register
 		addr_t offset);
+        
 /* Local VM prototypes */
 struct vm_rg_struct * get_symrg_byid(struct mm_struct* mm, int rgid);
 int validate_overlap_vm_area(struct pcb_t *caller, int vmaid, addr_t vmastart, addr_t vmaend);
@@ -161,7 +162,6 @@ int init_memphy(struct memphy_struct *mp, addr_t max_size, int randomflg);
 int print_list_fp(struct framephy_struct *fp);
 int print_list_rg(struct vm_rg_struct *rg);
 int print_list_vma(struct vm_area_struct *rg);
-
 
 int print_list_pgn(struct pgn_t *ip);
 int print_pgtbl(struct pcb_t *ip, addr_t start, addr_t end);

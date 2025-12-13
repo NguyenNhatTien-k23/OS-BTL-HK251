@@ -69,26 +69,49 @@ struct vm_rg_struct *get_symrg_byid(struct mm_struct *mm, int rgid)
  */
 int __alloc(struct pcb_t *caller, int vmaid, int rgid, addr_t size, addr_t *alloc_addr)
 {
+
   /*Allocate at the toproof */
   pthread_mutex_lock(&mmvm_lock);
   struct vm_rg_struct rgnode;
   struct vm_area_struct *cur_vma = get_vma_by_num(caller->krnl->mm, vmaid);
-  int inc_sz=0;
+  int inc_sz = 0;
 
+  // Try to find a free region in the current free region list
   if (get_free_vmrg_area(caller, vmaid, size, &rgnode) == 0)
   {
     caller->krnl->mm->symrgtbl[rgid].rg_start = rgnode.rg_start;
     caller->krnl->mm->symrgtbl[rgid].rg_end = rgnode.rg_end;
- 
     *alloc_addr = rgnode.rg_start;
-
     pthread_mutex_unlock(&mmvm_lock);
     return 0;
   }
 
   /* TODO get_free_vmrg_area FAILED handle the region management (Fig.6)*/
+  // Merge adjacent free regions in the free list if possible
+  struct vm_area_struct *vma = cur_vma;
+  struct vm_rg_struct *curr = vma->vm_freerg_list;
+  while (curr && curr->rg_next) {
+    if (curr->rg_end == curr->rg_next->rg_start) {
+      curr->rg_end = curr->rg_next->rg_end;
+      struct vm_rg_struct *to_free = curr->rg_next;
+      curr->rg_next = curr->rg_next->rg_next;
+      free(to_free);
+    } else {
+      curr = curr->rg_next;
+    }
+  }
 
-  /*Attempt to increate limit to get space */
+  // Try again after compaction
+  if (get_free_vmrg_area(caller, vmaid, size, &rgnode) == 0)
+  {
+    caller->krnl->mm->symrgtbl[rgid].rg_start = rgnode.rg_start;
+    caller->krnl->mm->symrgtbl[rgid].rg_end = rgnode.rg_end;
+    *alloc_addr = rgnode.rg_start;
+    pthread_mutex_unlock(&mmvm_lock);
+    return 0;
+  }
+
+  // Calculate the increment size (page aligned)
 #ifdef MM64
   inc_sz = (uint32_t)(size/(int)PAGING64_PAGESZ);
   inc_sz = inc_sz + 1;
@@ -99,10 +122,12 @@ int __alloc(struct pcb_t *caller, int vmaid, int rgid, addr_t size, addr_t *allo
   inc_sz = inc_sz + 1;
 
   old_sbrk = cur_vma->sbrk;
+  printf("old_sbrk: %d\n", old_sbrk);
 
   /* TODO INCREASE THE LIMIT
    * SYSCALL 1 sys_memmap
    */
+  // Use syscall to increase the memory mapping limit for the process
   struct sc_regs regs;
   regs.a1 = SYSMEM_INC_OP;
   regs.a2 = vmaid;
@@ -110,14 +135,25 @@ int __alloc(struct pcb_t *caller, int vmaid, int rgid, addr_t size, addr_t *allo
   regs.a3 = size;
 #else
   regs.a3 = PAGING_PAGE_ALIGNSZ(size);
-#endif  
+#endif
   syscall(caller->krnl, caller->pid, 17, &regs); /* SYSCALL 17 sys_memmap */
+
+  // If the increment is larger than requested, add the leftover to freerg_list
+  if (inc_sz > size) {
+    struct vm_rg_struct *leftover = malloc(sizeof(struct vm_rg_struct));
+    leftover->rg_start = size + old_sbrk + 1;
+    leftover->rg_end = inc_sz + old_sbrk;
+    leftover->rg_next = NULL;
+    enlist_vm_freerg_list(caller->krnl->mm, leftover);
+  }
+  cur_vma->sbrk += inc_sz;
 
   /*Successful increase limit */
   caller->krnl->mm->symrgtbl[rgid].rg_start = old_sbrk;
   caller->krnl->mm->symrgtbl[rgid].rg_end = old_sbrk + size;
-
   *alloc_addr = old_sbrk;
+  printf("alloc_addr: %d\n", *alloc_addr);
+  printf("PID=%d - Region=%d - Address=%08x - Size=%d byte\n", caller->pid, rgid, *alloc_addr, size);
 
   pthread_mutex_unlock(&mmvm_lock);
   return 0;
@@ -142,6 +178,9 @@ int __free(struct pcb_t *caller, int vmaid, int rgid)
   }
 
   /* TODO: Manage the collect freed region to freerg_list */
+  // When freeing a region, add the freed region to the free region list (freerg_list) for later reuse.
+  // This helps the memory manager keep track of available memory blocks for future allocations.
+  // The freed region is cloned and inserted at the head of the free region list.
   struct vm_rg_struct *rgnode = get_symrg_byid(caller->krnl->mm, rgid);
 
   if (rgnode->rg_start == 0 && rgnode->rg_end == 0)
@@ -149,10 +188,14 @@ int __free(struct pcb_t *caller, int vmaid, int rgid)
     pthread_mutex_unlock(&mmvm_lock);
     return -1;
   }
+
   struct vm_rg_struct *freerg_node = malloc(sizeof(struct vm_rg_struct));
   freerg_node->rg_start = rgnode->rg_start;
   freerg_node->rg_end = rgnode->rg_end;
   freerg_node->rg_next = NULL;
+
+  // Debug print for freed region
+  printf("Free region ID: %d, start: %d, end: %d\n", rgid, freerg_node->rg_start, freerg_node->rg_end);
 
   rgnode->rg_start = rgnode->rg_end = 0;
   rgnode->rg_next = NULL;
@@ -178,12 +221,14 @@ int liballoc(struct pcb_t *proc, addr_t size, uint32_t reg_index)
   {
     return -1;
   }
-#ifdef IODUMP
+  #ifdef IODUMP
   /* TODO dump IO content (if needed) */
-#ifdef PAGETBL_DUMP
-  print_pgtbl(proc, 0, -1); // print max TBL
-#endif
-#endif
+  // Dump the page table and memory content for debugging if enabled
+  #ifdef PAGETBL_DUMP
+    print_pgtbl(proc, 0, -1); // print max TBL
+  #endif
+  // You can add more dump functions here if needed, e.g. dump memory regions
+  #endif
 
   /* By default using vmaid = 0 */
   return val;
