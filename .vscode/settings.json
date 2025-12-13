@@ -1,0 +1,14 @@
+{
+    "files.associations": {
+        "syscall.h": "c",
+        "cpu.h": "c",
+        "mem.h": "c",
+        "stdlib.h": "c",
+        "common.h": "c",
+        "stdint.h": "c",
+        "bitops.h": "c",
+        "os-mm.h": "c",
+        "os-cfg.h": "c",
+        "loader.h": "c"
+    }
+}
