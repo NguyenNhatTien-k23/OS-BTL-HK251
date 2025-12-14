@@ -155,6 +155,8 @@ void put_proc(struct pcb_t * proc) {
 void add_proc(struct pcb_t * proc) {
 	pthread_mutex_lock(&queue_lock);
 	enqueue(&running_list, proc); 
+	// In trạng thái của running_list
+    // printf("[DEBUG] add_proc: running_list size = %d\n", running_list.size);
 	pthread_mutex_unlock(&queue_lock);
 
 	return add_mlq_proc(proc);
