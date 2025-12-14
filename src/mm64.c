@@ -473,11 +473,11 @@ addr_t alloc_pages_range(struct pcb_t* caller, int req_pgnum, struct framephy_st
     return 0;
 
   addr_t fpn;
+  int pgit;
   struct framephy_struct* head = NULL;
   struct framephy_struct* tail = NULL;
 
-  for (int i = 0; i < req_pgnum; i++) {
-
+  for (pgit = 0; pgit < req_pgnum; pgit++) {
     /* Try to allocate a free frame */
     if (MEMPHY_get_freefp(caller->krnl->mram, &fpn) != 0) {
       /* Roll back: free all previously allocated frames */
@@ -488,19 +488,28 @@ addr_t alloc_pages_range(struct pcb_t* caller, int req_pgnum, struct framephy_st
         cur = cur->fp_next;
         free(tmp);
       }
-      return -1;
+      return -3000; // match sample: -3000 for OOM
     }
 
-    /* Create a new node for this successfully allocated frame */
     struct framephy_struct* node = malloc(sizeof(struct framephy_struct));
+    if (!node) {
+      // Roll back all previous allocations
+      struct framephy_struct* cur = head;
+      while (cur) {
+        MEMPHY_put_freefp(caller->krnl->mram, cur->fpn);
+        struct framephy_struct* tmp = cur;
+        cur = cur->fp_next;
+        free(tmp);
+      }
+      return -1; // malloc error
+    }
     node->fpn = fpn;
     node->fp_next = NULL;
 
     if (!head) {
       head = node;
       tail = node;
-    }
-    else {
+    } else {
       tail->fp_next = node;
       tail = node;
     }
@@ -576,16 +585,18 @@ int __swap_cp_page(struct memphy_struct* mpsrc, addr_t srcfpn,
  * @caller: mm owner
  */
 int init_mm(struct mm_struct* mm, struct pcb_t* caller) {
-  struct vm_area_struct* vma0 = malloc(sizeof(struct vm_area_struct));
-
-  /* TODO init page table directory */
   if (!mm) {
     printf("init_mm: mm is NULL\n");
     return -1;
   }
-
   if (!caller) {
     printf("init_mm: caller is NULL\n");
+    return -1;
+  }
+
+  struct vm_area_struct* vma0 = malloc(sizeof(struct vm_area_struct));
+  if (!vma0) {
+    printf("init_mm: malloc vma0 failed\n");
     return -1;
   }
 
@@ -594,6 +605,16 @@ int init_mm(struct mm_struct* mm, struct pcb_t* caller) {
   mm->pud = calloc(PAGING64_MAX_PGN, sizeof(addr_t));
   mm->pmd = calloc(PAGING64_MAX_PGN, sizeof(addr_t));
   mm->pt  = NULL;
+
+  if (!mm->pgd || !mm->p4d || !mm->pud || !mm->pmd) {
+    printf("init_mm: calloc page tables failed\n");
+    if (mm->pgd) free(mm->pgd);
+    if (mm->p4d) free(mm->p4d);
+    if (mm->pud) free(mm->pud);
+    if (mm->pmd) free(mm->pmd);
+    free(vma0);
+    return -1;
+  }
 
   /* By default the owner comes with at least one vma */
   vma0->vm_id = 0;
