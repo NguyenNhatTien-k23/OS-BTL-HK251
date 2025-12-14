@@ -473,11 +473,11 @@ addr_t alloc_pages_range(struct pcb_t* caller, int req_pgnum, struct framephy_st
     return 0;
 
   addr_t fpn;
-  int pgit;
   struct framephy_struct* head = NULL;
   struct framephy_struct* tail = NULL;
 
-  for (pgit = 0; pgit < req_pgnum; pgit++) {
+  for (int i = 0; i < req_pgnum; i++) {
+
     /* Try to allocate a free frame */
     if (MEMPHY_get_freefp(caller->krnl->mram, &fpn) != 0) {
       /* Roll back: free all previously allocated frames */
@@ -488,28 +488,19 @@ addr_t alloc_pages_range(struct pcb_t* caller, int req_pgnum, struct framephy_st
         cur = cur->fp_next;
         free(tmp);
       }
-      return -3000; // match sample: -3000 for OOM
+      return -1;
     }
 
+    /* Create a new node for this successfully allocated frame */
     struct framephy_struct* node = malloc(sizeof(struct framephy_struct));
-    if (!node) {
-      // Roll back all previous allocations
-      struct framephy_struct* cur = head;
-      while (cur) {
-        MEMPHY_put_freefp(caller->krnl->mram, cur->fpn);
-        struct framephy_struct* tmp = cur;
-        cur = cur->fp_next;
-        free(tmp);
-      }
-      return -1; // malloc error
-    }
     node->fpn = fpn;
     node->fp_next = NULL;
 
     if (!head) {
       head = node;
       tail = node;
-    } else {
+    }
+    else {
       tail->fp_next = node;
       tail = node;
     }
@@ -585,18 +576,16 @@ int __swap_cp_page(struct memphy_struct* mpsrc, addr_t srcfpn,
  * @caller: mm owner
  */
 int init_mm(struct mm_struct* mm, struct pcb_t* caller) {
+  struct vm_area_struct* vma0 = malloc(sizeof(struct vm_area_struct));
+
+  /* TODO init page table directory */
   if (!mm) {
     printf("init_mm: mm is NULL\n");
     return -1;
   }
+
   if (!caller) {
     printf("init_mm: caller is NULL\n");
-    return -1;
-  }
-
-  struct vm_area_struct* vma0 = malloc(sizeof(struct vm_area_struct));
-  if (!vma0) {
-    printf("init_mm: malloc vma0 failed\n");
     return -1;
   }
 
@@ -605,16 +594,6 @@ int init_mm(struct mm_struct* mm, struct pcb_t* caller) {
   mm->pud = calloc(PAGING64_MAX_PGN, sizeof(addr_t));
   mm->pmd = calloc(PAGING64_MAX_PGN, sizeof(addr_t));
   mm->pt  = NULL;
-
-  if (!mm->pgd || !mm->p4d || !mm->pud || !mm->pmd) {
-    printf("init_mm: calloc page tables failed\n");
-    if (mm->pgd) free(mm->pgd);
-    if (mm->p4d) free(mm->p4d);
-    if (mm->pud) free(mm->pud);
-    if (mm->pmd) free(mm->pmd);
-    free(vma0);
-    return -1;
-  }
 
   /* By default the owner comes with at least one vma */
   vma0->vm_id = 0;
@@ -744,145 +723,37 @@ int print_pgtbl(struct pcb_t *caller, addr_t start, addr_t end)
     addr_t pgd, p4d, pud, pmd, pt;
     get_pd_from_address(pgit << PAGING64_ADDR_PT_SHIFT, &pgd, &p4d, &pud, &pmd, &pt);
 
-    void *pgd_tbl = mm->pgd;
-    void *p4d_tbl = mm->p4d;
-    void *pud_tbl = mm->pud;
-    void *pmd_tbl = mm->pmd;
+    /* Level 1: PGD */
+    addr_t* pgd_tbl = krnl->mm->pgd;
+    if (krnl->mm->pgd[pgd] == 0) {
+      krnl->mm->pgd[pgd] = (addr_t)calloc(PAGING64_MAX_PGN, sizeof(addr_t));
+    }
+    addr_t* p4d_tbl = (addr_t*)krnl->mm->pgd[pgd];
+
+    /* Level 2: P4D */
+    if (p4d_tbl[p4d] == 0) {
+      p4d_tbl[p4d] = (addr_t)calloc(PAGING64_MAX_PGN, sizeof(addr_t));
+    }
+    addr_t* pud_tbl = (addr_t*)p4d_tbl[p4d];
+
+    /* Level 3: PUD */
+    if (pud_tbl[pud] == 0) {
+      pud_tbl[pud] = (addr_t)calloc(PAGING64_MAX_PGN, sizeof(addr_t));
+    }
+    addr_t* pmd_tbl = (addr_t*)pud_tbl[pud];
+
+    /* Level 4: PMD */
+    if (pmd_tbl[pmd] == 0) {
+      pmd_tbl[pmd] = (addr_t)calloc(PAGING64_MAX_PGN, sizeof(addr_t));
+    }
 
     printf("print_pgtbl:\n");
-    printf("  PDG=%p P4g=%p PUD=%p PMD=%p\n",
-           pgd_tbl,
-           p4d_tbl,
-           pud_tbl,
-           pmd_tbl);
+    printf("  PDG=%lx P4g=%lx PUD=%lx PMD=%lx\n",
+           *pgd_tbl,
+           *p4d_tbl,
+           *pud_tbl,
+           *pmd_tbl);
   }
   return 0;
 }
-
-// int print_pgtbl(struct pcb_t *caller, addr_t start, addr_t end)
-// {
-//     struct mm_struct *mm = caller->krnl->mm;
-
-//     printf("print_pgtbl:\n");
-//     printf(" PDG=%p P4g=%p PUD=%p PMD=%p\n",
-//            (void *)mm->pgd,
-//            (void *)mm->p4d,
-//            (void *)mm->pud,
-//            (void *)mm->pmd);
-
-//     return 0;
-// }
-
-// int print_pgtbl(struct pcb_t* caller, addr_t start, addr_t end) {
-//   addr_t pgn_start, pgn_end;
-//   addr_t pgit;
-//   struct krnl_t* krnl = caller->krnl;
-//   #ifdef DEBUG
-//   printf("[DEBUG] print_pgtbl called for PID=%d, start=0x%llx, end=0x%llx\n", caller->pid, (unsigned long long)start, (unsigned long long)end);
-//   #endif
-
-//   if (end == (addr_t)-1) {
-//     struct vm_area_struct* cur_vma = get_vma_by_num(caller->krnl->mm, 0);
-//     start = cur_vma->vm_start;
-//     end = cur_vma->vm_end;
-//     #ifdef DEBUG
-//     printf("[DEBUG] print_pgtbl: using vma0 range start=0x%llx, end=0x%llx\n", (unsigned long long)start, (unsigned long long)end);
-//     #endif
-//   }
-
-//   pgn_start = start >> PAGING64_ADDR_PT_SHIFT;
-//   pgn_end = end >> PAGING64_ADDR_PT_SHIFT;
-
-//   addr_t pgd = 0;
-//   addr_t p4d = 0;
-//   addr_t pud = 0;
-//   addr_t pmd = 0;
-//   addr_t pt = 0;
-
-//   for (pgit = pgn_start; pgit <= pgn_end; pgit += PAGING64_PAGESZ) {
-//     get_pd_from_address(pgit, &pgd, &p4d, &pud, &pmd, &pt);
-//     uint64_t* pgd_tbl = krnl->mm->pgd;
-//     if (!pgd_tbl) { 
-//       #ifdef DEBUG
-//       printf("[DEBUG] print_pgtbl: pgd_tbl NULL\n"); 
-//       #endif
-
-//       continue; 
-//     }
-//     if (pgd_tbl[pgd] == 0) { 
-//       #ifdef DEBUG
-//       printf("[DEBUG] print_pgtbl: pgd_tbl[%llu] == 0\n", (unsigned long long)pgd); 
-//       #endif
-
-//       continue; 
-//     }
-
-//     uint64_t* p4d_tbl = (uint64_t*)pgd_tbl[pgd];
-//     if (!p4d_tbl) {
-//       #ifdef DEBUG
-//       printf("[DEBUG] print_pgtbl: p4d_tbl NULL\n"); 
-//       #endif
-
-//       continue; 
-//     }
-//     if (p4d_tbl[p4d] == 0) { 
-//       #ifdef DEBUG
-//       printf("[DEBUG] print_pgtbl: p4d_tbl[%llu] == 0\n", (unsigned long long)p4d); 
-//       #endif
-
-//       continue; 
-//     }
-
-//     uint64_t* pud_tbl = (uint64_t*)p4d_tbl[p4d];
-//     if (!pud_tbl) { 
-//       #ifdef DEBUG
-//       printf("[DEBUG] print_pgtbl: pud_tbl NULL\n"); 
-//       #endif
-
-//       continue; 
-//     }
-//     if (pud_tbl[pud] == 0) { 
-//       #ifdef DEBUG
-//       printf("[DEBUG] print_pgtbl: pud_tbl[%llu] == 0\n", (unsigned long long)pud); 
-//       #endif
-
-//       continue; 
-//     }
-
-//     uint64_t* pmd_tbl = (uint64_t*)pud_tbl[pud];
-//     if (!pmd_tbl) { 
-//       #ifdef DEBUG
-//       printf("[DEBUG] print_pgtbl: pmd_tbl NULL\n");
-//       #endif
-
-//       continue; 
-//     }
-//     if (pmd_tbl[pmd] == 0) { 
-//       #ifdef DEBUG
-//       printf("[DEBUG] print_pgtbl: pmd_tbl[%llu] == 0\n", (unsigned long long)pmd); 
-//       #endif
-
-//       continue; 
-//     }
-
-//     uint64_t* pt_tbl = (uint64_t*)pmd_tbl[pmd];
-//     if (!pt_tbl) {
-//       #ifdef DEBUG
-//       printf("[DEBUG] print_pgtbl: pt_tbl NULL\n");
-//       #endif
-
-//       continue; 
-//     }
-
-  //   printf("print_pgtbl:\n");
-  //   printf("  PDG=%p P4g=%p PUD=%p PMD=%p\n",
-  //           (void*)pgd_tbl,
-  //           (void*)p4d_tbl,
-  //           (void*)pud_tbl,
-  //           (void*)pmd_tbl
-  //         );
-  // }
-//   return 0;
-// }
-
 #endif  //def MM64
