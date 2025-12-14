@@ -18,7 +18,7 @@ static struct queue_t ready_queue;
 static struct queue_t run_queue;
 static pthread_mutex_t queue_lock;
 
-static struct queue_t running_list;
+struct queue_t running_list;
 #ifdef MLQ_SCHED
 static struct queue_t mlq_ready_queue[MAX_PRIO];
 static int slot[MAX_PRIO];
@@ -149,6 +149,10 @@ void put_proc(struct pcb_t * proc) {
 void add_proc(struct pcb_t * proc) {
 	pthread_mutex_lock(&queue_lock);
 	enqueue(&running_list, proc); 
+
+    // In trạng thái của running_list
+    // printf("[DEBUG] add_proc: running_list size = %d\n", running_list.size);
+
 	pthread_mutex_unlock(&queue_lock);
 
 	return add_mlq_proc(proc);
