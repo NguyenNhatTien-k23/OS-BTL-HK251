@@ -144,7 +144,11 @@ int __free(struct pcb_t* caller, int vmaid, int rgid) {
     return -1;
   }
 
-  struct vm_rg_struct *freerg_node = malloc(sizeof(struct vm_rg_struct));
+    struct vm_rg_struct *freerg_node = malloc(sizeof(struct vm_rg_struct));
+    if (!freerg_node) {
+      pthread_mutex_unlock(&mmvm_lock);
+      return -1;
+    }
   freerg_node->rg_start = rgnode->rg_start;
   freerg_node->rg_end = rgnode->rg_end;
   freerg_node->rg_next = NULL;
@@ -174,6 +178,7 @@ int liballoc(struct pcb_t* proc, addr_t size, uint32_t reg_index) {
   }
 
   printf("%s:%d\n", __func__, __LINE__);
+    fflush(stdout);
 #ifdef IODUMP
 #ifdef PAGETBL_DUMP
   print_pgtbl(proc, 0, -1); // print max TBL
@@ -198,6 +203,7 @@ int libfree(struct pcb_t* proc, uint32_t reg_index) {
   }
 
   printf("%s:%d\n", __func__, __LINE__);
+    fflush(stdout);
 #ifdef IODUMP
 #ifdef PAGETBL_DUMP
   print_pgtbl(proc, 0, -1); // print max TBL
@@ -347,6 +353,7 @@ int libread(
   
   *destination = data;
   printf("%s:%d\n", __func__, __LINE__);
+    fflush(stdout);
 #ifdef IODUMP
   /* TODO dump IO content (if needed) */
 #ifdef PAGETBL_DUMP
@@ -395,6 +402,7 @@ int libwrite(
     return -1;
   }
   printf("%s:%d\n", __func__, __LINE__);
+    fflush(stdout);
 #ifdef IODUMP
 #ifdef PAGETBL_DUMP
   print_pgtbl(proc, 0, -1); // print max TBL
