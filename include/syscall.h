@@ -7,6 +7,8 @@
  * personal permission to use and modify the Licensed Source Code
  * for the sole purpose of studying while attending the course CO2018.
  */
+#ifndef SYSCALL_H
+#define SYSCALL_H
 
 #include "common.h"
 
@@ -41,3 +43,4 @@ int libsyscall(struct pcb_t*, uint32_t, arg_t, arg_t, arg_t);
 int syscall(struct krnl_t*, uint32_t, uint32_t, struct sc_regs*);
 int __sys_ni_syscall(struct krnl_t*, struct sc_regs*);
 
+#endif

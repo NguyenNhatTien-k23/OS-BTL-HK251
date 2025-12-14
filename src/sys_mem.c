@@ -13,6 +13,8 @@
 #include "libmem.h"
 #include "queue.h"
 #include <stdlib.h>
+#include <pthread.h>
+#include "common.h"
 
 #ifdef MM64
 #include "mm64.h"
@@ -21,6 +23,9 @@
 #endif
 
 //typedef char BYTE;
+
+// Định nghĩa mutex để bảo vệ các hàng đợi
+pthread_mutex_t queue_lock = PTHREAD_MUTEX_INITIALIZER;
 
 int __sys_memmap(struct krnl_t *krnl, uint32_t pid, struct sc_regs* regs)
 {
@@ -36,24 +41,33 @@ int __sys_memmap(struct krnl_t *krnl, uint32_t pid, struct sc_regs* regs)
     */
 
    /* Traverse proclist to find the process with matching PID */
+   pthread_mutex_lock(&queue_lock);
    if (krnl->running_list != NULL) {
-      struct queue_t *running_list = krnl->running_list;
       struct pcb_t *proc;
       int i;
-      int list_size = running_list->size;
+      int list_size = krnl->running_list->size;
+
+      // Debug: In ra toàn bộ PID trong running_list
+      // printf("[DEBUG] running_list PIDs: ");
+      // for (int j = 0; j < list_size; j++) {
+      //    if (krnl->running_list->proc[j])
+      //       printf("%d ", krnl->running_list->proc[j]->pid);
+      // }
+      // printf("\n");
       
       /* Search through running list for matching PID */
       for (i = 0; i < list_size && caller == NULL; i++) {
-         proc = (struct pcb_t *)dequeue(running_list);
+         proc = (struct pcb_t *)dequeue(krnl->running_list);
          if (proc != NULL) {
             if (proc->pid == pid) {
                caller = proc;
             }
             /* Re-enqueue process to maintain queue state */
-            enqueue(running_list, proc);
+            enqueue(krnl->running_list, proc);
          }
       }
    }
+   pthread_mutex_unlock(&queue_lock);
    
    /* Validate caller process was found */
    if (caller == NULL) {

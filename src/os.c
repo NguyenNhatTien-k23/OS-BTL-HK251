@@ -1,4 +1,3 @@
-
 #include "cpu.h"
 #include "timer.h"
 #include "sched.h"
@@ -43,7 +42,6 @@ struct cpu_args {
 	struct timer_id_t * timer_id;
 	int id;
 };
-
 
 static void * cpu_routine(void * args) {
 	struct timer_id_t * timer_id = ((struct cpu_args*)args)->timer_id;
@@ -114,11 +112,12 @@ static void * ld_routine(void * args) {
 	printf("ld_routine\n");
 	while (i < num_processes) {
 		struct pcb_t * proc = load(ld_processes.path[i]);
-		struct krnl_t * krnl = proc->krnl = &os;	
+		struct krnl_t * krnl = proc->krnl = &os;
 
 #ifdef MLQ_SCHED
 		proc->prio = ld_processes.prio[i];
 #endif
+		krnl->running_list = &running_list;
 		while (current_time() < ld_processes.start_time[i]) {
 			next_slot(timer_id);
 		}
@@ -274,6 +273,3 @@ int main(int argc, char * argv[]) {
 	return 0;
 
 }
-
-
-

@@ -8,17 +8,17 @@
  * for the sole purpose of studying while attending the course CO2018.
  */
 
-// #ifdef MM_PAGING
 /*
- * PAGING based Memory Management
- * Memory physical module mm/mm-memphy.c
- */
+* PAGING based Memory Management
+* Memory physical module mm/mm-memphy.c
+*/
 
 #include "mm64.h"
 #include <stdio.h>
 #include <stdlib.h>
 #include <string.h>
 
+#ifdef MM_PAGING
 /*
  *  MEMPHY_mv_csr - move MEMPHY cursor
  *  @mp: memphy struct
@@ -152,6 +152,8 @@ int MEMPHY_format(struct memphy_struct *mp, int pagesz)
 
 int MEMPHY_get_freefp(struct memphy_struct *mp, addr_t *retfpn)
 {
+   if (mp == NULL || retfpn == NULL) return -1;
+   
    struct framephy_struct *fp = mp->free_fp_list;
 
    if (fp == NULL)
@@ -186,7 +188,7 @@ int MEMPHY_dump(struct memphy_struct *mp)
          }
       }
    }
-   printf("DUMP END\n");
+   // printf("DUMP END\n");
    return 0;
 
    //End TODO
@@ -224,4 +226,4 @@ int init_memphy(struct memphy_struct *mp, addr_t max_size, int randomflg)
    return 0;
 }
 
-// #endif
+#endif

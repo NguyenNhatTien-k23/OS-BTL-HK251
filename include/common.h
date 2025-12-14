@@ -3,8 +3,10 @@
 
 /* Define structs and routine could be used by every source files */
 
+
 #include <stdint.h>
 #include <stdio.h>
+#include <pthread.h>
 
 #ifndef OSCFG_H
 #include "os-cfg.h"
@@ -132,5 +134,6 @@ struct krnl_t
 #endif
 };
 
+extern struct queue_t running_list;
 
 #endif
