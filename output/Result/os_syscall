@@ -1,0 +1,36 @@
+Time slot   0
+ld_routine
+Time slot   1
+Time slot   2
+Time slot   3
+Time slot   4
+Time slot   5
+Time slot   6
+Time slot   7
+Time slot   8
+Time slot   9
+        Loaded a process at input/proc/sc2, PID: 1 PRIO: 15
+        CPU 0: Dispatched process  1
+liballoc:176
+print_pgtbl:
+  PDG=75a588000bb0 P4g=75a588001bc0 PUD=75a588002bd0 PMD=75a588003be0
+Time slot  10
+libwrite:397
+print_pgtbl:
+  PDG=75a588000bb0 P4g=75a588001bc0 PUD=75a588002bd0 PMD=75a588003be0
+Time slot  11
+        CPU 0: Put process  1 to run queue
+        CPU 0: Dispatched process  1
+libwrite:397
+print_pgtbl:
+  PDG=75a588000bb0 P4g=75a588001bc0 PUD=75a588002bd0 PMD=75a588003be0
+Time slot  12
+libwrite:397
+print_pgtbl:
+  PDG=75a588000bb0 P4g=75a588001bc0 PUD=75a588002bd0 PMD=75a588003be0
+Time slot  13
+        CPU 0: Put process  1 to run queue
+        CPU 0: Dispatched process  1
+Time slot  14
+        CPU 0: Processed  1 has finished
+        CPU 0 stopped
