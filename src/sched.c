@@ -45,7 +45,7 @@ void init_scheduler(void) {
 #endif
 	ready_queue.size = 0;
 	run_queue.size = 0;
-	//running_list.size = 0;
+	running_list.size = 0;
 	pthread_mutex_init(&queue_lock, NULL);
 }
 
@@ -79,17 +79,23 @@ struct pcb_t * get_mlq_proc(void) {
 		return NULL;
 	}
 
-	if (!empty(&mlq_ready_queue[currentPrio]) && used_slot < slot[currentPrio]) {
+	if (empty(&mlq_ready_queue[currentPrio]) || highestPrio < currentPrio) {
+		currentPrio = highestPrio;
+		used_slot = 0;
+	}
+
+	if (used_slot < slot[currentPrio] && !empty(&mlq_ready_queue[currentPrio])) {
 		proc = dequeue(&mlq_ready_queue[currentPrio]);
 		used_slot++;
+
 	} else {
 		used_slot = 0;
 		int found = 0;
-		for (int i = 0; i < MAX_PRIO; i++) {
-			int prio = (currentPrio + i) % MAX_PRIO;
-			if (!empty(&mlq_ready_queue[prio])) {
-				currentPrio = prio;
-				proc = dequeue(&mlq_ready_queue[prio]);
+		for (int i = 1; i < MAX_PRIO + 1; i++) {
+			int nextPrio = (currentPrio + i) % MAX_PRIO;
+			if (!empty(&mlq_ready_queue[nextPrio])) {
+				currentPrio = nextPrio;
+				proc = dequeue(&mlq_ready_queue[currentPrio]);
 				used_slot = 1;
 				found = 1;
 				break;
@@ -149,10 +155,8 @@ void put_proc(struct pcb_t * proc) {
 void add_proc(struct pcb_t * proc) {
 	pthread_mutex_lock(&queue_lock);
 	enqueue(&running_list, proc); 
-
-    // In trạng thái của running_list
+	// In trạng thái của running_list
     // printf("[DEBUG] add_proc: running_list size = %d\n", running_list.size);
-
 	pthread_mutex_unlock(&queue_lock);
 
 	return add_mlq_proc(proc);
