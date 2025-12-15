@@ -279,19 +279,18 @@ int pg_getpage(struct mm_struct *mm, int pgn, int *fpn, struct pcb_t *caller)
 int pg_getval(struct mm_struct *mm, int addr, BYTE *data, struct pcb_t *caller)
 {
   int pgn = PAGING_PGN(addr);
-//  int off = PAGING_OFFST(addr);
+  int off = PAGING_OFFST(addr);
   int fpn;
 
   if (pg_getpage(mm, pgn, &fpn, caller) != 0)
     return -1; /* invalid page access */
 
-//  int phyaddr = (fpn << PAGING_ADDR_FPN_LOBIT) + off;
+  int phyaddr = (fpn << PAGING_ADDR_FPN_LOBIT) + off;
 
-  /* TODO 
-   *  MEMPHY_read(caller->krnl->mram, phyaddr, data);
-   *  MEMPHY READ 
-   *  SYSCALL 17 sys_memmap with SYSMEM_IO_READ
-   */
+  // Actually read the value from physical memory
+  if (MEMPHY_read(caller->krnl->mram, phyaddr, data) != 0) {
+    return -1;
+  }
 
   return 0;
 }
@@ -305,19 +304,19 @@ int pg_getval(struct mm_struct *mm, int addr, BYTE *data, struct pcb_t *caller)
 int pg_setval(struct mm_struct *mm, int addr, BYTE value, struct pcb_t *caller)
 {
   int pgn = PAGING_PGN(addr);
-//  int off = PAGING_OFFST(addr);
+  int off = PAGING_OFFST(addr);
   int fpn;
 
   /* Get the page to MEMRAM, swap from MEMSWAP if needed */
   if (pg_getpage(mm, pgn, &fpn, caller) != 0)
     return -1; /* invalid page access */
 
+  int phyaddr = (fpn << PAGING_ADDR_FPN_LOBIT) + off;
 
-  /* TODO 
-   *  MEMPHY_write(caller->krnl->mram, phyaddr, value);
-   *  MEMPHY WRITE with SYSMEM_IO_WRITE 
-   * SYSCALL 17 sys_memmap
-   */
+  // Actually write the value to physical memory
+  if (MEMPHY_write(caller->krnl->mram, phyaddr, value) != 0) {
+    return -1;
+  }
 
   return 0;
 }
@@ -332,10 +331,20 @@ int pg_setval(struct mm_struct *mm, int addr, BYTE value, struct pcb_t *caller)
  */
 int __read(struct pcb_t* caller, int vmaid, int rgid, addr_t offset, BYTE* data) {
   struct vm_rg_struct* currg = get_symrg_byid(caller->krnl->mm, rgid);
-
-  //  struct vm_area_struct *cur_vma = get_vma_by_num(caller->krnl->mm, vmaid);
-
-    /* TODO Invalid memory identify */
+  if (currg == NULL) {
+    // Memory region not found
+    return -1;
+  }
+  // Check if the memory region is valid (allocated)
+  if (currg->rg_start == 0 && currg->rg_end == 0) {
+    // Memory region not allocated
+    return -1;
+  }
+  // Check if offset is within the region
+  if (currg->rg_start + offset >= currg->rg_end || offset < 0) {
+    // Offset is out of region bounds
+    return -1;
+  }
 
   pg_getval(caller->krnl->mm, currg->rg_start + offset, data, caller);
 
